@@ -22,11 +22,14 @@ import ghidra.program.model.data.ArrayDataType;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.data.Structure;
 import ghidra.program.model.data.StructureDataType;
-import ghidra.util.exception.DuplicateNameException;
 
 import java.io.IOException;
 import java.util.Formatter;
 
+/**
+ * Parser for the PCI data structure stored within PCI option ROM images. See OptionROMHeader for a
+ * description of the fields within the data structure.
+ */
 public class PCIDataStructureHeader implements StructConverter {
 	// Original header fields
 	private String signature;
@@ -44,6 +47,11 @@ public class PCIDataStructureHeader implements StructConverter {
 	private short configUtilityCodeOffset;
 	private short dmtfClpOffset;
 
+	/**
+	 * Constructs a PCIDataStructureHeader from a specified BinaryReader.
+	 *
+	 * @param reader the specified BinaryReader
+	 */
 	public PCIDataStructureHeader(BinaryReader reader) throws IOException {
 		signature = reader.readNextAsciiString(OptionROMConstants.PCIR_SIGNATURE.length());
 		if (!signature.equals(OptionROMConstants.PCIR_SIGNATURE)) {
@@ -71,42 +79,70 @@ public class PCIDataStructureHeader implements StructConverter {
 		}
 	}
 
-	public int getImageLength() {
-		return imageLength * OptionROMConstants.ROM_SIZE_UNIT;
-	}
-
+	/**
+	 * Returns the current image's code type.
+	 *
+	 * @return the current image's code type
+	 */
 	public byte getCodeType() {
 		return codeType;
 	}
 
+	/**
+	 * Returns the device list offset.
+	 *
+	 * @return the device list offset
+	 */
+	public short getDeviceListOffset() {
+		if (headerRevision == 3) {
+			return deviceListOffset;
+		} else {
+			return 0;
+		}
+	}
+
+	/**
+	 * Returns the size of the current image.
+	 *
+	 * @return the size of the current image
+	 */
+	public int getImageLength() {
+		return imageLength * OptionROMConstants.ROM_SIZE_UNIT;
+	}
+
+	/**
+	 * Checks if this is the last image in the expansion ROM.
+	 *
+	 * @return if this is the last image in the expansion ROM
+	 */
 	public boolean isLastImage() {
 		// Bit 7 in the last image indicator field tells if this is the last image in the ROM.
 		return (lastImageIndicator & 0x80) != 0;
 	}
 
 	@Override
-	public DataType toDataType() throws DuplicateNameException, IOException {
-		Structure structure = new StructureDataType("pci_data_structure_header", 0);
-		structure.add(new ArrayDataType(ASCII, 4, ASCII.getLength()), "signature", null);
-		structure.add(BYTE, "vendor_id", null);
-		structure.add(BYTE, "device_id", null);
+	public DataType toDataType() {
+		Structure structure = new StructureDataType("pci_data_structure_header_t", 0);
+		structure.add(new ArrayDataType(ASCII, 4, 1), "signature", null);
+		structure.add(WORD, 2, "vendor_id", null);
+		structure.add(WORD, 2, "device_id", null);
 		if (headerRevision == 3) {
-			structure.add(WORD, "device_list_offset", null);
+			structure.add(WORD, 2, "device_list_offset", null);
 		} else {
-			structure.add(WORD, "reserved_1", null);
+			structure.add(WORD, 2, "reserved_1", null);
 		}
 
-		structure.add(WORD, "pcir_header_len", null);
-		structure.add(WORD, "pcir_header_rev", null);
-		structure.add(new ArrayDataType(BYTE, 3, BYTE.getLength()), "class_code", null);
-		structure.add(WORD, "image_len", null);
-		structure.add(WORD, "vendor_rom_rev", null);
-		structure.add(BYTE, "code_type", null);
-		structure.add(BYTE, "last_image_indicator", null);
+		structure.add(WORD, 2, "pcir_header_len", null);
+		structure.add(BYTE, 1, "pcir_header_rev", null);
+		structure.add(new ArrayDataType(BYTE, 3, 1), "class_code", null);
+		structure.add(WORD, 2, "image_len", null);
+		structure.add(WORD, 2, "vendor_rom_rev", null);
+		structure.add(BYTE, 1, "code_type", null);
+		structure.add(BYTE, 1, "last_image_indicator", null);
 		if (headerRevision == 3) {
-			structure.add(WORD, "max_runtime_image_len", null);
-			structure.add(WORD, "config_utility_code_offset", null);
-			structure.add(WORD, "dmtf_clp_entry_point_offset", null);
+			structure.add(WORD, 2, "max_runtime_image_len", null);
+			structure.add(WORD, 2, "config_utility_code_offset", null);
+			structure.add(WORD, 2, "dmtf_clp_entry_point_offset", null);
 		} else {
 			structure.add(WORD, "reserved_2", null);
 		}
@@ -120,10 +156,10 @@ public class PCIDataStructureHeader implements StructConverter {
 		formatter.format("Vendor ID: 0x%X\n", vendorID);
 		formatter.format("Device ID: 0x%X\n", deviceID);
 		formatter.format("Image Length: 0x%X\n", getImageLength());
-		formatter.format("Vendor ROM Revison: 0x%X\n", romRevision);
+		formatter.format("Vendor ROM Revision: 0x%X\n", romRevision);
 		formatter.format("Code Type: %s (%d)\n", OptionROMConstants.CodeType.toString(codeType),
 				codeType);
-		formatter.format("Last Image: %b\n", isLastImage());
+		formatter.format("Last Image: %b", isLastImage());
 		return formatter.toString();
 	}
 }
